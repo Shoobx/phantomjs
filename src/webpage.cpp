@@ -452,7 +452,7 @@ QString WebPage::content() const
 
 QString WebPage::frameContent() const
 {
-    return m_currentFrame->toHtml();
+    return this->currentFrame()->toHtml();
 }
 
 void WebPage::setContent(const QString& content)
@@ -472,7 +472,7 @@ void WebPage::setContent(const QString& content, const QString& baseUrl)
 
 void WebPage::setFrameContent(const QString& content)
 {
-    m_currentFrame->setHtml(content);
+    this->currentFrame()->setHtml(content);
 }
 
 QString WebPage::title() const
@@ -482,7 +482,7 @@ QString WebPage::title() const
 
 QString WebPage::frameTitle() const
 {
-    return m_currentFrame->title();
+    return this->currentFrame()->title();
 }
 
 QString WebPage::url() const
@@ -492,7 +492,7 @@ QString WebPage::url() const
 
 QString WebPage::frameUrl() const
 {
-    return m_currentFrame->url().toString();
+    return this->currentFrame()->url().toString();
 }
 
 bool WebPage::loading() const
@@ -569,7 +569,7 @@ QString WebPage::plainText() const
 
 QString WebPage::framePlainText() const
 {
-    return m_currentFrame->toPlainText();
+    return this->currentFrame()->toPlainText();
 }
 
 QString WebPage::libraryPath() const
@@ -728,7 +728,7 @@ QVariant WebPage::evaluateJavaScript(const QString& code)
 
     qDebug() << "WebPage - evaluateJavaScript" << function;
 
-    evalResult = m_currentFrame->evaluateJavaScript(
+    evalResult = this->currentFrame()->evaluateJavaScript(
                      function,                                   //< function evaluated
                      QString("phantomjs://webpage.evaluate()")); //< reference source file
 
@@ -1317,7 +1317,7 @@ QString WebPage::footer(int page, int numPages)
 
 void WebPage::_uploadFile(const QString& selector, const QStringList& fileNames)
 {
-    QWebElement el = m_currentFrame->findFirstElement(selector);
+    QWebElement el = this->currentFrame()->findFirstElement(selector);
     if (el.isNull()) {
         return;
     }
@@ -1335,12 +1335,12 @@ void WebPage::_uploadFile(const QString& selector, const QStringList& fileNames)
 
 bool WebPage::injectJs(const QString& jsFilePath)
 {
-    return Utils::injectJsInFrame(jsFilePath, m_libraryPath, m_currentFrame);
+    return Utils::injectJsInFrame(jsFilePath, m_libraryPath, this->currentFrame());
 }
 
 void WebPage::_appendScriptElement(const QString& scriptUrl)
 {
-    m_currentFrame->evaluateJavaScript(QString(JS_APPEND_SCRIPT_ELEMENT).arg(scriptUrl), scriptUrl);
+    this->currentFrame()->evaluateJavaScript(QString(JS_APPEND_SCRIPT_ELEMENT).arg(scriptUrl), scriptUrl);
 }
 
 QObject* WebPage::_getGenericCallback()
@@ -1554,7 +1554,7 @@ void WebPage::setOwnsPages(const bool owns)
 
 int WebPage::framesCount() const
 {
-    return m_currentFrame->childFrames().count();
+    return this->currentFrame()->childFrames().count();
 }
 
 int WebPage::childFramesCount() const //< deprecated
@@ -1566,7 +1566,7 @@ QStringList WebPage::framesName() const
 {
     QStringList framesName;
 
-    foreach(const QWebFrame * f, m_currentFrame->childFrames()) {
+    foreach(const QWebFrame * f, this->currentFrame()->childFrames()) {
         framesName << f->frameName();
     }
     return framesName;
@@ -1579,15 +1579,19 @@ QStringList WebPage::childFramesName() const //< deprecated
 
 void WebPage::changeCurrentFrame(QWebFrame* const frame)
 {
-    if (frame != m_currentFrame) {
-        qDebug() << "WebPage - changeCurrentFrame" << "from" << (m_currentFrame == NULL ? "Undefined" : m_currentFrame->frameName()) << "to" << frame->frameName();
+    QWebFrame* current = this->currentFrame();
+    if (frame != current) {
+        qDebug() << "WebPage - changeCurrentFrame" << "from" << (current == NULL ? "Undefined" : current->frameName()) << "to" << frame->frameName();
+        m_currentFrame = frame;
+    } else if (frame != m_currentFrame) {
+        qDebug() << "WebPage - changeCurrentFrame" << "from a destroyed frame to" << frame->frameName();
         m_currentFrame = frame;
     }
 }
 
 bool WebPage::switchToFrame(const QString& frameName)
 {
-    QList<QWebFrame*> childFrames = m_currentFrame->childFrames();
+    QList<QWebFrame*> childFrames = this->currentFrame()->childFrames();
     for (int i = childFrames.length() - 1; i >= 0; --i) {
         if (childFrames.at(i)->frameName() == frameName) {
             this->changeCurrentFrame(childFrames.at(i));
@@ -1604,7 +1608,7 @@ bool WebPage::switchToChildFrame(const QString& frameName) //< deprecated
 
 bool WebPage::switchToFrame(const int framePosition)
 {
-    QList<QWebFrame*> childFrames = m_currentFrame->childFrames();
+    QList<QWebFrame*> childFrames = this->currentFrame()->childFrames();
     if (framePosition >= 0 && framePosition < childFrames.size()) {
         this->changeCurrentFrame(childFrames.at(framePosition));
         return true;
@@ -1619,15 +1623,20 @@ bool WebPage::switchToChildFrame(const int framePosition) //< deprecated
 
 void WebPage::switchToMainFrame()
 {
-    if (m_currentFrame != m_mainFrame) {
+    QWebFrame* current = findFrame(m_currentFrame);
+    if (current != m_mainFrame) {
         this->changeCurrentFrame(m_mainFrame);
     }
 }
 
 bool WebPage::switchToParentFrame()
 {
-    if (m_currentFrame->parentFrame() != NULL) {
-        this->changeCurrentFrame(m_currentFrame->parentFrame());
+    QWebFrame* current = this->currentFrame();
+    if (current != m_currentFrame) {
+        this->changeCurrentFrame(m_mainFrame);
+        return true;
+    } else if (current->parentFrame() != NULL) {
+        this->changeCurrentFrame(current->parentFrame());
         return true;
     }
     return false;
@@ -1640,7 +1649,7 @@ void WebPage::switchToFocusedFrame()
 
 QString WebPage::frameName() const
 {
-    return m_currentFrame->frameName();
+    return this->currentFrame()->frameName();
 }
 
 QString WebPage::currentFrameName() const //< deprecated
@@ -1669,6 +1678,36 @@ void WebPage::setupFrame(QWebFrame* frame)
 
     // Inject the Callbacks object in the main frame
     injectCallbacksObjIntoFrame(frame == NULL ? m_mainFrame : frame, m_callbacks);
+}
+
+QWebFrame* WebPage::currentFrame() const
+{
+    if (m_currentFrame == NULL) {
+        return NULL;
+    }
+    QWebFrame* topFrame = m_customWebPage->mainFrame();
+    QWebFrame* currentFrame = this->findFrame(m_currentFrame, topFrame);
+    return currentFrame == NULL ? topFrame : currentFrame;
+}
+
+QWebFrame* WebPage::findFrame(QWebFrame* frame, const QWebFrame* topFrame) const
+{
+    if (topFrame == NULL) {
+        topFrame = m_customWebPage->mainFrame();
+    }
+
+    if (topFrame == frame) {
+        return frame;
+    }
+
+    foreach(const QWebFrame* childFrame, topFrame->childFrames()) {
+        QWebFrame* result = this->findFrame(frame, childFrame);
+        if (result != NULL) {
+            return result;
+        }
+    }
+
+    return NULL;
 }
 
 void WebPage::updateLoadingProgress(int progress)
