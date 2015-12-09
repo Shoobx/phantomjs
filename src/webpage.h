@@ -478,6 +478,8 @@ signals:
 private slots:
     void finish(bool ok);
     void setupFrame(QWebFrame *frame = NULL);
+    QWebFrame* findFrame(QWebFrame* frame, const QWebFrame* topFrame=NULL) const;
+    QWebFrame* currentFrame() const;
     void updateLoadingProgress(int progress);
 
 private:
